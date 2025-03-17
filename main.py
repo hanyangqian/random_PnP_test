@@ -1,9 +1,10 @@
+# ======================================
+# 主程序
+# ======================================
+
 import numpy as np
-import matplotlib.pyplot as plt
 import cv2
-import time
 from scipy.spatial.transform import Rotation
-from typing import Tuple
 
 # ================== 第一部分：点的处理 ==================
 # 生成虚拟点，模拟CAD模型，为世界坐标系点坐标
@@ -28,11 +29,11 @@ def generate_rotation_matrix() -> np.ndarray:
     return rot_matrix_scipy
 
 # 生成平移矩阵
-def generate_translation_matrix(trans_range=(-500, 500)) -> np.ndarray:
-    """
-        trans_range: 平移范围 (默认[-500, 500])
-    """
-    t = np.random.uniform(*trans_range, 3)
+def generate_translation_matrix() -> np.ndarray:
+    x = np.random.uniform(-500, 500)
+    y = np.random.uniform(-500, 500)
+    z = np.random.uniform(2000, 3000)
+    t = np.array([x, y, z])
     return t
 
 # 添加高斯噪声
@@ -75,7 +76,7 @@ if __name__ == '__main__':
     
     # 相机外参（假定世界坐标系与相机坐标系重合）
     camera_pose = np.eye(4)
-    camera_pose[:3, 3] = [0, 0, -2000]
+    camera_pose[:3, 3] = [0, 0, 0]
     M = camera_pose
     
     # 畸变参数（默认无畸变）
