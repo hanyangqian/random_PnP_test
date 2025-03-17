@@ -12,11 +12,12 @@ from typing import Tuple
 # 为刚性变换后的坐标点添加高斯噪声
 
 # 生成三维虚拟点
-def points_generation(n, x_min=-50, x_max=50, y_min=-50, y_max=50, z_min=-50, z_max=50):
+def points_generation(n: int, x_min=-50, x_max=50, y_min=-100, y_max=100, z_min=-50, z_max=50) -> np.ndarray:
     x = np.random.uniform(x_min, x_max, n)
     y = np.random.uniform(y_min, y_max, n)
     z = np.random.uniform(z_min, z_max, n)
     points = np.column_stack((x, y, z))
+    print(f'空间三维点:{points}')
     return points
 
 # 随机生成旋转矩阵函数
@@ -25,30 +26,24 @@ def generate_rotation_matrix() -> np.ndarray:
     random_rot = Rotation.random()
     # 转换为旋转矩阵
     rot_matrix_scipy = random_rot.as_matrix()
+    print(f'旋转矩阵:{rot_matrix_scipy}')
     return rot_matrix_scipy
 
 # 随机生成平移矩阵
-def generate_translation(trans_range=(-500, 500)):
+def generate_translation(trans_range=(-500, 500)) -> np.ndarray:
     """
-    生成随机平移向量
-    参数：
         trans_range: 平移范围 (默认[-500, 500])
-    返回：
-        3维平移向量
     """
     t = np.random.uniform(*trans_range, 3)
+    print(f'平移矩阵:{t}')
     return t
 
 # 添加高斯噪声
-def add_noise(points, mu=0, sigma=0.1):
+def add_noise(points: np.ndarray, mu=0, sigma=0.1) -> np.ndarray:
     """
-    为点云添加高斯噪声
-    参数：
         points: 输入点云
         mu: 均值 (默认0)
         sigma: 标准差 (默认0.1)
-    返回：
-        添加噪声后的点云
     """
     noise = np.random.normal(mu, sigma, points.shape)
     return points + noise
@@ -136,48 +131,71 @@ if __name__ == '__main__':
     
     jishuqi = 1
     
-    while(jishuqi <= 100):
-        # 点个数
-        points_num = 4  # 随机点个数
-        
-        # 相机内参
-        fu, fv = 800, 800  # 焦距
-        img_width, img_height = 640, 480  # 图像分辨率
-        u0, v0 = fu/2 , fv/2  # 像主点坐标
-        K = np.array([
-            [fu, 0, u0],
-            [0, fv, v0],
-            [0, 0, 1]
-        ])
-        
-        # 相机外参（假定世界坐标系与相机坐标系重合）
-        camera_pose = np.eye(4)
-        camera_pose[:3, 3] = [0, 0, -2000]
-        M = camera_pose
-        
+    # 随机数种子（保证复现）
+    np.random.seed(42)
+    
+    # 点个数
+    points_num = 4  # 随机点个数
+    
+    # 相机内参
+    fu, fv = 800, 800  # 焦距
+    img_width, img_height = 640, 480  # 图像分辨率
+    u0, v0 = fu/2 , fv/2  # 像主点坐标
+    K = np.array([
+        [fu, 0, u0],
+        [0, fv, v0],
+        [0, 0, 1]
+    ])
+    
+    # 相机外参（假定世界坐标系与相机坐标系重合）
+    camera_pose = np.eye(4)
+    camera_pose[:3, 3] = [0, 0, -5000]
+    M = camera_pose
+    
+    while(jishuqi <= 10):
         # 生成原始点云
         original_points = points_generation(points_num)
-        np.savetxt("./Result/original_points.txt", original_points, fmt='%.6f')
         
         # 生成变换矩阵
         R = generate_rotation_matrix()
         t = generate_translation()
-        np.savetxt("./Result/RotationMatrix.txt", R, fmt="%.6f")
-        np.savetxt("./Result/TranslationMatrix.txt", t, fmt="%.6f")
-        
-        
+
         # 应用刚体变换
         transformed_points = (R @ original_points.T).T + t
-        np.savetxt("./Result/transformed_points.txt", transformed_points, fmt='%.6f')
+        
+        dist_coeffs = np.zeros((5,1), dtype=np.float32)
+        R_vec = cv2.Rodrigues(R)[0]
+        print(R_vec)
+        image_points, _ = cv2.projectPoints(transformed_points, R_vec, t, K, dist_coeffs)
+        print(f'cv2投影坐标{image_points}')
+        
+        # 投影矩阵计算
+        projected_points = project(transformed_points, K, np.linalg.inv(camera_pose))
+        print(f'手动投影坐标{image_points}')
+        
+        print(image_points)
+        print(projected_points)
+        
+        # 可视化
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.scatter(projected_points[:,0], projected_points[:,1], 
+                    c='k', s=100, linewidth=1, 
+                    marker='o', label='Projected Points')
+        ax.scatter(projected_points[:,0], projected_points[:,1], 
+                    c='r', s=100, linewidth=1, 
+                    marker='o', label='Projected Points')
+        ax.set_title('Projected Points', fontsize=14)
+        plt.tight_layout()
+        plt.show()
+        
         
         ''' 
         # 添加高斯噪声
         noisy_points = add_noise(transformed_points)
         '''
         
-        # 投影矩阵计算
-        projected_points = project(transformed_points, K, np.linalg.inv(camera_pose))
-        np.savetxt("./Result/projected_points.txt", projected_points, fmt='%.6f')
+        
 
         # 三维坐标可视化
         visualization(original_points, transformed_points, projected_points)
@@ -188,21 +206,41 @@ if __name__ == '__main__':
         camera_matrix = K  # 相机内参
 
         # ================== EPnP ==================
-        retval_EPnP, rvec_EPnP, tvec_EPnP, time_sum_EPnP = EPnP(world_points, image_points, camera_matrix)
+        time_start = time.time()  # 计时开始
+        retval_EPnP, rvec_EPnP, tvec_EPnP = cv2.solvePnP(world_points, image_points, camera_matrix, None, flags=cv2.SOLVEPNP_EPNP)
+        time_end = time.time()  # 计时结束
+        time_sum = time_end - time_start
+        print(time_sum)
         
         if retval_EPnP == 1:
             # 重投影误差计算
             mean_error_EPnP = average_reprojection_error(world_points, rvec_EPnP, tvec_EPnP, camera_matrix, image_points)
 
         # ================== P3P ==================
-        retval_P3P, rvec_P3P, tvec_P3P, time_sum_P3P = P3P(world_points, image_points, camera_matrix)
-
+        time_start = time.time()  # 计时开始
+        retval_P3P, rvec_P3P, tvec_P3P = cv2.solvePnP(world_points, image_points, camera_matrix, None, flags=cv2.SOLVEPNP_P3P)
+        time_end = time.time()  # 计时结束
+        time_sum = time_end - time_start
+        print(time_sum)
+        
+        print(f'旋转向量:{rvec_P3P}')
+        print(f'平移向量:{tvec_P3P}')
+        '''        
+        if retval_EPnP == 1:
         # 重投影误差计算
-        mean_error_P3P = average_reprojection_error(world_points, rvec_P3P, tvec_P3P, camera_matrix, image_points)
-
+            mean_error_P3P = average_reprojection_error(world_points, rvec_P3P, tvec_P3P, camera_matrix, image_points)
+            print(f'重投影误差:{mean_error_P3P:.2f}')
+        '''
 
         print(jishuqi)
         jishuqi = jishuqi + 1
         
-        
+        R = np.array([
+            [-0.07588133, -0.99435054, -0.07422278],
+            [-0.08218319, 0.08042097, -0.9933672 ],
+            [ 0.99372428, -0.06927816, -0.08782135]
+            ])
+        print(R.T @ R)
+        print(R @ R.T)
+        print(np.linalg.det(R))
         
