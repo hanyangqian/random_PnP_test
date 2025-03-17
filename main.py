@@ -61,8 +61,6 @@ def average_reprojection_error(original_points: np.ndarray, rvec: np.ndarray, tv
 if __name__ == '__main__':
     # ========================================== 参数设置 ============================================
     
-    # 点个数
-    points_num = 4  # 随机点个数
     
     # 相机内参
     fu, fv = 800, 800  # 焦距
@@ -81,6 +79,9 @@ if __name__ == '__main__':
     
     # 畸变参数（默认无畸变）
     dist_coeffs = np.zeros((5,1), dtype=np.float32)
+    
+    # 点个数
+    points_num = 4  # 随机点个数
     
     # txt文裆重置
     with open('./Result/mean_error.txt', 'w') as f:
